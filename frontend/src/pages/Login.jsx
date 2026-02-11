@@ -83,6 +83,9 @@ const Login = () => {
                   required
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Enter your email, then click "Forgot Password?" if needed
+              </p>
             </div>
 
             <div>
@@ -102,7 +105,11 @@ const Login = () => {
                 />
               </div>
               <div className="text-right mt-2">
-                <Link to="/forgot-password" className="text-sm text-primary-500 hover:text-primary-600">
+                <Link 
+                  to="/forgot-password" 
+                  state={{ email: formData.email }}
+                  className="text-sm text-primary-500 hover:text-primary-600"
+                >
                   Forgot Password?
                 </Link>
               </div>

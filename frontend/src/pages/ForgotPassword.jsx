@@ -1,20 +1,30 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Leaf, Mail, Lock, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 
 const ForgotPassword = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const emailFromLogin = location.state?.email || '';
+  
   const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: New Password
   const [formData, setFormData] = useState({
-    email: '',
+    email: emailFromLogin,
     otp: '',
     newPassword: '',
     confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
+
+  // If no email from login, show warning
+  useEffect(() => {
+    if (!emailFromLogin) {
+      setError('Please enter your email on the login page first, then click "Forgot Password?"');
+    }
+  }, [emailFromLogin]);
 
   const handleChange = (e) => {
     setFormData({
@@ -27,6 +37,12 @@ const ForgotPassword = () => {
   // Step 1: Send OTP to email
   const handleSendOTP = async (e) => {
     e.preventDefault();
+    
+    if (!formData.email) {
+      setError('Please go back to login page and enter your email first');
+      return;
+    }
+    
     setLoading(true);
     setError('');
 
@@ -203,20 +219,28 @@ const ForgotPassword = () => {
                     type="email"
                     name="email"
                     value={formData.email}
-                    onChange={handleChange}
-                    className="input-field pl-10"
+                    readOnly
+                    className="input-field pl-10 bg-gray-50 cursor-not-allowed"
                     placeholder="you@example.com"
                     required
                   />
                 </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  This is the email you entered on the login page. 
+                  {!emailFromLogin && (
+                    <Link to="/login" className="text-primary-500 hover:text-primary-600 ml-1">
+                      Go back to login
+                    </Link>
+                  )}
+                </p>
               </div>
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !formData.email}
                 className="btn-primary w-full"
               >
-                {loading ? 'Sending OTP...' : 'Send OTP'}
+                {loading ? 'Sending OTP...' : 'Send OTP to This Email'}
               </button>
             </form>
           )}
