@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Leaf, User, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Leaf, User, Mail, Lock, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Register = () => {
@@ -13,9 +13,21 @@ const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [passwordFocus, setPasswordFocus] = useState(false);
 
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  // Password validation checks
+  const passwordChecks = {
+    length: formData.password.length >= 8,
+    uppercase: /[A-Z]/.test(formData.password),
+    lowercase: /[a-z]/.test(formData.password),
+    number: /[0-9]/.test(formData.password),
+    match: formData.password === formData.confirmPassword && formData.password !== ''
+  };
+
+  const isPasswordValid = Object.values(passwordChecks).every(check => check);
 
   const handleChange = (e) => {
     setFormData({
@@ -30,15 +42,23 @@ const Register = () => {
     setLoading(true);
     setError('');
 
-    // Validation
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please provide a valid email address');
+      setLoading(false);
+      return;
+    }
+
+    // Password validation
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       setLoading(false);
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (!isPasswordValid) {
+      setError('Please meet all password requirements');
       setLoading(false);
       return;
     }
@@ -129,11 +149,61 @@ const Register = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
+                  onFocus={() => setPasswordFocus(true)}
                   className="input-field pl-10"
                   placeholder="••••••••"
                   required
                 />
               </div>
+              
+              {/* Password Requirements */}
+              {passwordFocus && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-2">
+                  <p className="text-xs font-medium text-gray-700 mb-2">Password must contain:</p>
+                  <div className="space-y-1">
+                    <div className="flex items-center text-xs">
+                      {passwordChecks.length ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400 mr-2" />
+                      )}
+                      <span className={passwordChecks.length ? 'text-green-700' : 'text-gray-600'}>
+                        At least 8 characters
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs">
+                      {passwordChecks.uppercase ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400 mr-2" />
+                      )}
+                      <span className={passwordChecks.uppercase ? 'text-green-700' : 'text-gray-600'}>
+                        One uppercase letter
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs">
+                      {passwordChecks.lowercase ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400 mr-2" />
+                      )}
+                      <span className={passwordChecks.lowercase ? 'text-green-700' : 'text-gray-600'}>
+                        One lowercase letter
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs">
+                      {passwordChecks.number ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400 mr-2" />
+                      )}
+                      <span className={passwordChecks.number ? 'text-green-700' : 'text-gray-600'}>
+                        One number
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -152,6 +222,21 @@ const Register = () => {
                   required
                 />
               </div>
+              {formData.confirmPassword && (
+                <div className="mt-2 flex items-center text-xs">
+                  {passwordChecks.match ? (
+                    <>
+                      <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
+                      <span className="text-green-700">Passwords match</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 text-red-500 mr-1" />
+                      <span className="text-red-700">Passwords do not match</span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <button

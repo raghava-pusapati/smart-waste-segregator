@@ -32,6 +32,14 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+  resetPasswordOTP: {
+    type: String,
+    select: false
+  },
+  resetPasswordOTPExpire: {
+    type: Date,
+    select: false
   }
 }, {
   timestamps: true
@@ -64,6 +72,31 @@ userSchema.methods.getPublicProfile = function() {
     totalScans: this.totalScans,
     createdAt: this.createdAt
   };
+};
+
+// Method to generate OTP
+userSchema.methods.generateResetOTP = function() {
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  // Hash OTP before saving
+  this.resetPasswordOTP = bcrypt.hashSync(otp, 10);
+  
+  // Set expiry to 10 minutes
+  this.resetPasswordOTPExpire = Date.now() + 10 * 60 * 1000;
+  
+  return otp;
+};
+
+// Method to verify OTP
+userSchema.methods.verifyResetOTP = function(otp) {
+  // Check if OTP has expired
+  if (Date.now() > this.resetPasswordOTPExpire) {
+    return false;
+  }
+  
+  // Compare OTP
+  return bcrypt.compareSync(otp, this.resetPasswordOTP);
 };
 
 const User = mongoose.model('User', userSchema);
