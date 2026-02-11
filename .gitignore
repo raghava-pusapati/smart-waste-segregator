@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+backend/.env
+model-service/.env
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Model files (large files)
+*.keras
+*.h5
+*.pb
+model-service/models/*.keras
+model-service/models/*.h5
+
+# Python virtual environment
+venv/
+env/
+ENV/
+
+# Package lock files (optional - uncomment if you want to exclude)
+# package-lock.json
+# frontend/package-lock.json
+# backend/package-lock.json
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Documentation and guide files (generated during development)
+IMPROVE_ACCURACY_GUIDE.md
+PERFECT_TRAINING_GUIDE.md
+MODEL_SAVE_INSTRUCTIONS.md
+MODEL_UPLOAD_GUIDE.md
+TRAINING_WITH_PREPROCESSING.md
+CHANGES_SUMMARY.md
+FINAL_STATUS.md
+FEATURES_AND_ROADMAP.md
+IMPLEMENTATION_GUIDE.md
+GET_STARTED_NOW.md
+QUICK_REFERENCE.md
+QUICK_START.md
+START_HERE.md
+SUMMARY.md
+VISUAL_GUIDE.md
+YOUR_SETUP_GUIDE.md
+README_FOR_YOU.md
+INDEX.md
+RETRAIN_NOW.md
+PREPROCESSING_OPTIONS.md
+model-service/SOLUTION.md
+model-service/fix_model_properly.py
+model-service/load_model_fix.py

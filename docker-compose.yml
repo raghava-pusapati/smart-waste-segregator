@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:5000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - MODEL_SERVICE_URL=http://model-service:8000
+    depends_on:
+      - model-service
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  model-service:
+    build: ./model-service
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/app/models/waste_classifier.keras
+    volumes:
+      - ./model-service:/app
