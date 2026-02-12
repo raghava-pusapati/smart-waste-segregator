@@ -43,15 +43,24 @@ IMG_SIZE = 224  # Matches your training
 async def load_model():
     global model
     try:
-        model_path = os.getenv("MODEL_PATH", "./models/waste_classifier.keras")
-        logger.info(f"Loading model from {model_path}")
+        # Use SavedModel format with TensorFlow's native loader
+        # Keras 3 doesn't support SavedModel with keras.models.load_model()
+        model_path = os.getenv("MODEL_PATH", "./models/model_folder")
+        logger.info(f"Loading SavedModel from {model_path}")
         
-        # Load model without compiling (avoids custom layer issues)
-        model = tf.keras.models.load_model(model_path, compile=False)
+        # Use TensorFlow's native SavedModel loader (not Keras)
+        model = tf.saved_model.load(model_path)
         
-        logger.info("✅ Model loaded successfully")
-        logger.info(f"Model input shape: {model.input_shape}")
-        logger.info(f"Model output shape: {model.output_shape}")
+        # Get the inference function
+        # The model has a 'serving_default' signature for inference
+        infer = model.signatures["serving_default"]
+        
+        logger.info("✅ SavedModel loaded successfully")
+        logger.info(f"Model format: TensorFlow SavedModel")
+        logger.info(f"Available signatures: {list(model.signatures.keys())}")
+        
+        # Store the inference function globally
+        globals()['infer'] = infer
         
     except Exception as e:
         logger.error(f"❌ Failed to load model: {str(e)}")
@@ -59,9 +68,10 @@ async def load_model():
         import traceback
         logger.error(traceback.format_exc())
 
-def preprocess_image(image_bytes: bytes) -> np.ndarray:
+def preprocess_image(image_bytes: bytes) -> tf.Tensor:
     """
-    Preprocess image to match your Colab testing (simple normalization, no EfficientNet preprocessing)
+    Preprocess image for SavedModel inference
+    Returns TensorFlow tensor ready for model input
     """
     try:
         # Open image
@@ -74,16 +84,17 @@ def preprocess_image(image_bytes: bytes) -> np.ndarray:
         # Resize to model input size
         image = image.resize((IMG_SIZE, IMG_SIZE))
         
-        # Convert to array (same as your Colab: img_to_array)
+        # Convert to array
         img_array = np.array(image, dtype=np.float32)
         
         # Add batch dimension
         img_array = np.expand_dims(img_array, axis=0)
         
-        # NO preprocessing function - just raw pixel values like your Colab code
-        # Your model was trained/tested without preprocess_input
+        # Convert to TensorFlow tensor
+        input_tensor = tf.convert_to_tensor(img_array, dtype=tf.float32)
         
-        return img_array
+        return input_tensor
+        
     except Exception as e:
         logger.error(f"Image preprocessing error: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid image format")
@@ -116,8 +127,13 @@ async def predict(file: UploadFile = File(...)):
         - confidence: Prediction confidence (0-100)
     """
     try:
+        logger.info(f"📥 Received prediction request")
+        logger.info(f"   File: {file.filename}")
+        logger.info(f"   Content-Type: {file.content_type}")
+        
         # Validate file type
         if not file.content_type.startswith('image/'):
+            logger.error(f"❌ Invalid file type: {file.content_type}")
             raise HTTPException(
                 status_code=400,
                 detail="File must be an image (JPEG, PNG, JPG)"
@@ -125,11 +141,12 @@ async def predict(file: UploadFile = File(...)):
         
         # Read image bytes
         image_bytes = await file.read()
+        logger.info(f"   Image size: {len(image_bytes)} bytes")
         
         # Check if model is loaded
         if model is None:
             # Return mock prediction for testing
-            logger.warning("Model not loaded, returning mock prediction")
+            logger.warning("⚠️ Model not loaded, returning mock prediction")
             return JSONResponse(
                 status_code=200,
                 content={
@@ -139,18 +156,32 @@ async def predict(file: UploadFile = File(...)):
                 }
             )
         
-        # Preprocess image
-        processed_image = preprocess_image(image_bytes)
+        logger.info("🖼️  Preprocessing image...")
+        # Preprocess image - returns TensorFlow tensor
+        input_tensor = preprocess_image(image_bytes)
+        logger.info(f"   Tensor shape: {input_tensor.shape}")
         
-        # Make prediction
-        predictions = model.predict(processed_image, verbose=0)
+        # Get inference function
+        infer = globals().get('infer')
+        if infer is None:
+            logger.error("❌ Inference function not available")
+            raise Exception("Model inference function not available")
+        
+        logger.info("🤖 Running inference...")
+        # Run inference
+        output = infer(input_tensor)
+        
+        # Extract predictions from output dictionary
+        output_key = list(output.keys())[0]
+        predictions = output[output_key].numpy()
+        logger.info(f"   Output shape: {predictions.shape}")
         
         # Get predicted class and confidence
         predicted_class_idx = np.argmax(predictions[0])
         confidence = float(predictions[0][predicted_class_idx] * 100)
         category = class_names[predicted_class_idx]
         
-        logger.info(f"Prediction: {category} ({confidence:.2f}%)")
+        logger.info(f"✅ Prediction: {category} ({confidence:.2f}%)")
         
         return {
             "category": category,
@@ -164,7 +195,10 @@ async def predict(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
+        logger.error(f"❌ Prediction error: {str(e)}")
+        logger.error(f"   Error type: {type(e).__name__}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Prediction failed: {str(e)}"

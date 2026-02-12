@@ -45,13 +45,20 @@ const calculateEcoScore = (category, confidence) => {
 // @access  Private
 export const predictWaste = async (req, res, next) => {
   try {
+    console.log('📥 Prediction request received');
+    console.log('   User:', req.user?.email);
+    console.log('   File:', req.file?.originalname);
+    
     if (!req.file) {
+      console.log('❌ No file uploaded');
       return res.status(400).json({
         success: false,
         message: 'Please upload an image'
       });
     }
 
+    console.log('📤 Sending to model service...');
+    
     // Prepare form data for model service
     const formData = new FormData();
     formData.append('file', req.file.buffer, {
@@ -71,10 +78,14 @@ export const predictWaste = async (req, res, next) => {
       }
     );
 
+    console.log('✅ Model response:', modelResponse.data);
+    
     const { category, confidence } = modelResponse.data;
 
     // Calculate eco score
     const ecoPoints = calculateEcoScore(category, confidence);
+    
+    console.log('💾 Saving to database...');
 
     // Save waste record
     const wasteRecord = await Waste.create({
@@ -82,9 +93,16 @@ export const predictWaste = async (req, res, next) => {
       category: category.toLowerCase(),
       confidence: Math.round(confidence),
       disposalGuidance: disposalGuidance[category.toLowerCase()],
-      environmentalImpact: environmentalImpact[category.toLowerCase()],
+      environmentalImpact: {
+        carbonSaved: 0,
+        description: environmentalImpact[category.toLowerCase()]
+      },
+      ecoPoints: ecoPoints,
       timestamp: new Date()
     });
+
+    console.log('✅ Waste record saved:', wasteRecord._id);
+    console.log('📊 Updating user stats...');
 
     // Update user stats
     await User.findByIdAndUpdate(req.user._id, {
@@ -94,6 +112,9 @@ export const predictWaste = async (req, res, next) => {
       }
     });
 
+    console.log('✅ User stats updated');
+    console.log('🎉 Prediction complete!');
+
     res.status(200).json({
       success: true,
       message: 'Waste classified successfully',
@@ -102,18 +123,27 @@ export const predictWaste = async (req, res, next) => {
         category: wasteRecord.category,
         confidence: wasteRecord.confidence,
         disposalGuidance: wasteRecord.disposalGuidance,
-        environmentalImpact: wasteRecord.environmentalImpact,
+        environmentalImpact: wasteRecord.environmentalImpact.description,
         ecoPointsEarned: ecoPoints,
         timestamp: wasteRecord.timestamp
       }
     });
   } catch (error) {
-    console.error('Prediction error:', error);
+    console.error('❌ Prediction error:', error.message);
+    console.error('   Error details:', error.response?.data || error);
     
     if (error.code === 'ECONNREFUSED') {
       return res.status(503).json({
         success: false,
         message: 'Model service is unavailable. Please try again later.'
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      console.error('   Validation error:', error.errors);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error: ' + Object.values(error.errors).map(e => e.message).join(', ')
       });
     }
     

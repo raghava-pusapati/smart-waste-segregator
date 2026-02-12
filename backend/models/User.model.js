@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema({
     minlength: [6, 'Password must be at least 6 characters'],
     select: false
   },
+  profilePicture: {
+    type: String,
+    default: ''
+  },
   ecoScore: {
     type: Number,
     default: 0,
@@ -32,6 +36,43 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+  streak: {
+    current: {
+      type: Number,
+      default: 0
+    },
+    longest: {
+      type: Number,
+      default: 0
+    },
+    lastScanDate: {
+      type: Date,
+      default: null
+    }
+  },
+  badges: [{
+    name: String,
+    icon: String,
+    earnedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  level: {
+    type: Number,
+    default: 1
+  },
+  preferences: {
+    theme: {
+      type: String,
+      enum: ['light', 'dark', 'system'],
+      default: 'system'
+    },
+    notifications: {
+      type: Boolean,
+      default: true
+    }
   },
   resetPasswordOTP: {
     type: String,
@@ -68,8 +109,13 @@ userSchema.methods.getPublicProfile = function() {
     id: this._id,
     name: this.name,
     email: this.email,
+    profilePicture: this.profilePicture,
     ecoScore: this.ecoScore,
     totalScans: this.totalScans,
+    streak: this.streak,
+    badges: this.badges,
+    level: this.level,
+    preferences: this.preferences,
     createdAt: this.createdAt
   };
 };

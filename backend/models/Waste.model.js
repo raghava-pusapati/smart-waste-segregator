@@ -23,13 +23,30 @@ const wasteSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  imageData: {
+    type: String, // Base64 encoded for history
+    default: null
+  },
   disposalGuidance: {
     type: String,
     required: true
   },
+  recyclingTips: [{
+    type: String
+  }],
   environmentalImpact: {
-    type: String,
-    required: true
+    carbonSaved: {
+      type: Number,
+      default: 0
+    },
+    description: {
+      type: String,
+      required: true
+    }
+  },
+  ecoPoints: {
+    type: Number,
+    default: 10
   },
   timestamp: {
     type: Date,
