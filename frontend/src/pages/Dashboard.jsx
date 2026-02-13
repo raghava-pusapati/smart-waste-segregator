@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { wasteAPI } from '../services/api';
-import { Award, TrendingUp, Scan, Calendar } from 'lucide-react';
+import { Award, TrendingUp, Scan, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import toast from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -14,6 +14,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedDates, setExpandedDates] = useState(new Set());
 
   useEffect(() => {
     fetchDashboardData();
@@ -23,7 +24,7 @@ const Dashboard = () => {
     try {
       const [statsRes, historyRes] = await Promise.all([
         wasteAPI.getStats(),
-        wasteAPI.getHistory(1, 5)
+        wasteAPI.getHistory(1, 100) // Get more history for date grouping
       ]);
       
       setStats(statsRes.data.data);
@@ -34,6 +35,18 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleDate = (date) => {
+    setExpandedDates(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
+    });
   };
 
   if (loading) {
@@ -98,7 +111,22 @@ const Dashboard = () => {
     metal: '🔧',
     organic: '🌱',
     paper: '📄',
-    plastic: '♻️'
+    plastic: '♻️',
+    textile: '👕',
+    'e-waste': '💻',
+    battery: '🔋'
+  };
+
+  const categoryColors = {
+    glass: 'bg-cyan-100 text-cyan-800 border-cyan-300',
+    hazardous: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    metal: 'bg-blue-100 text-blue-800 border-blue-300',
+    organic: 'bg-green-100 text-green-800 border-green-300',
+    paper: 'bg-blue-100 text-blue-800 border-blue-300',
+    plastic: 'bg-blue-100 text-blue-800 border-blue-300',
+    textile: 'bg-blue-100 text-blue-800 border-blue-300',
+    'e-waste': 'bg-red-100 text-red-800 border-red-300',
+    battery: 'bg-yellow-100 text-yellow-800 border-yellow-300'
   };
 
   return (
@@ -226,7 +254,7 @@ const Dashboard = () => {
           </motion.div>
         </div>
 
-        {/* Recent Scans */}
+        {/* Recent Scans - Date Wise */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -239,36 +267,110 @@ const Dashboard = () => {
           
           {history.length > 0 ? (
             <div className="space-y-4">
-              {history.map((item, index) => (
+              {history.map((dateGroup) => (
                 <div
-                  key={item._id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  key={dateGroup.date}
+                  className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow"
                 >
-                  <div className="flex items-center space-x-4">
-                    <span className="text-3xl">
-                      {categoryIcons[item.category]}
-                    </span>
-                    <div>
-                      <p className="font-semibold text-gray-900 capitalize">
-                        {item.category}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(item.timestamp).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
+                  {/* Date Header - Clickable */}
+                  <button
+                    onClick={() => toggleDate(dateGroup.date)}
+                    className="w-full px-6 py-4 bg-gradient-to-r from-primary-50 to-accent-50 hover:from-primary-100 hover:to-accent-100 transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <Calendar className="w-5 h-5 text-primary-600" />
+                      <div className="text-left">
+                        <h3 className="text-lg font-bold text-gray-900">
+                          {dateGroup.date}
+                        </h3>
+                        <div className="flex items-center space-x-3 mt-1 flex-wrap gap-y-1">
+                          {Object.entries(dateGroup.categoryCounts).map(([category, count]) => (
+                            <span
+                              key={category}
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${categoryColors[category] || 'bg-gray-100 text-gray-800 border-gray-300'}`}
+                            >
+                              <span className="mr-1">{categoryIcons[category] || '📦'}</span>
+                              {category}: {count}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-600">Confidence</p>
-                    <p className="text-lg font-bold text-primary-500">
-                      {item.confidence}%
-                    </p>
-                  </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-gray-600">
+                        {dateGroup.scans.length} {dateGroup.scans.length === 1 ? 'scan' : 'scans'}
+                      </span>
+                      {expandedDates.has(dateGroup.date) ? (
+                        <ChevronUp className="w-5 h-5 text-gray-600" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-600" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Expandable Content */}
+                  <AnimatePresence>
+                    {expandedDates.has(dateGroup.date) && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-6 bg-gray-50 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {dateGroup.scans.map((scan) => (
+                            <div
+                              key={scan._id}
+                              className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200"
+                            >
+                              {/* Image */}
+                              {scan.imageUrl && (
+                                <div className="relative h-48 bg-gray-100">
+                                  <img
+                                    src={scan.imageUrl}
+                                    alt={scan.category}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f3f4f6" width="200" height="200"/%3E%3Ctext fill="%239ca3af" font-family="sans-serif" font-size="24" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
+                                    }}
+                                  />
+                                  {/* Category Badge */}
+                                  <div className="absolute top-2 right-2">
+                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border-2 shadow-lg ${categoryColors[scan.category] || 'bg-gray-100 text-gray-800 border-gray-300'}`}>
+                                      <span className="mr-1.5 text-lg">{categoryIcons[scan.category] || '📦'}</span>
+                                      {scan.category.toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Content */}
+                              <div className="p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${categoryColors[scan.category] || 'bg-gray-100 text-gray-800 border-gray-300'}`}>
+                                    {categoryIcons[scan.category] || '📦'} {scan.category}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(scan.timestamp).toLocaleTimeString('en-US', {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
+                                </div>
+
+                                {/* Disposal Guidance */}
+                                <div className="text-sm text-gray-700 leading-relaxed">
+                                  <p className="font-semibold text-gray-900 mb-1">Disposal:</p>
+                                  <p className="line-clamp-3">{scan.disposalGuidance}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               ))}
             </div>

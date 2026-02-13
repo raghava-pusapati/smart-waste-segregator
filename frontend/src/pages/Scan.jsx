@@ -23,6 +23,19 @@ const categoryIcons = {
   plastic: '♻️'
 };
 
+// Dustbin color mapping (Indian waste management standard)
+const dustbinColors = {
+  glass: { color: 'Green', emoji: '🟢', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-400' },
+  hazardous: { color: 'Yellow', emoji: '🟡', bgColor: 'bg-yellow-100', textColor: 'text-yellow-800', borderColor: 'border-yellow-400' },
+  metal: { color: 'Blue', emoji: '🔵', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-400' },
+  organic: { color: 'Green', emoji: '🟢', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-400' },
+  paper: { color: 'Blue', emoji: '🔵', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-400' },
+  plastic: { color: 'Blue', emoji: '🔵', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-400' },
+  textile: { color: 'Blue', emoji: '🔵', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-400' },
+  'e-waste': { color: 'Red', emoji: '🔴', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-400' },
+  battery: { color: 'Yellow', emoji: '🟡', bgColor: 'bg-yellow-100', textColor: 'text-yellow-800', borderColor: 'border-yellow-400' }
+};
+
 const Scan = () => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -169,12 +182,11 @@ const Scan = () => {
     }
 
     setLoading(true);
-    setResults([]);
-    const newResults = [];
+    setResults([]); // Clear previous results
     let totalEcoPoints = 0;
 
     try {
-      // Classify each image
+      // Classify each image and show results immediately
       for (let i = 0; i < selectedImages.length; i++) {
         setClassifyingIndex(i);
         
@@ -183,22 +195,26 @@ const Scan = () => {
 
         try {
           const response = await wasteAPI.predict(formData);
-          newResults.push({
+          const newResult = {
             success: true,
             data: response.data.data
-          });
-          totalEcoPoints += response.data.data.ecoPointsEarned;
+          };
+          
+          // Add result immediately
+          setResults(prev => [...prev, newResult]);
+          
+          const ecoPoints = response.data.data.ecoPointsEarned || 0;
+          totalEcoPoints += ecoPoints;
+          
         } catch (error) {
           console.error(`Classification error for image ${i + 1}:`, error);
-          newResults.push({
+          setResults(prev => [...prev, {
             success: false,
             error: error.response?.data?.message || 'Classification failed'
-          });
+          }]);
         }
       }
 
-      setResults(newResults);
-      
       // Update user stats with total points
       if (user && totalEcoPoints > 0) {
         updateUser({
@@ -208,8 +224,7 @@ const Scan = () => {
         });
       }
       
-      const successCount = newResults.filter(r => r.success).length;
-      toast.success(`${successCount}/${selectedImages.length} images classified successfully!`);
+      toast.success(`Classification complete!`);
     } catch (error) {
       console.error('Classification error:', error);
       toast.error('Classification failed');
@@ -478,78 +493,171 @@ const Scan = () => {
                 </div>
               </motion.div>
 
-              {/* Individual Results */}
-              {results.map((result, index) => (
-                result.success ? (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="glass-card rounded-2xl p-6"
-                  >
-                    <div className="flex items-start gap-4 mb-4">
-                      <img
-                        src={previews[index]}
-                        alt={`Result ${index + 1}`}
-                        className="w-24 h-24 object-cover rounded-lg"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-xl font-bold text-gray-900">
-                            Image {index + 1}
-                          </h3>
-                          <CheckCircle className="w-5 h-5 text-green-500" />
+              {/* Individual Results - Responsive Grid Layout */}
+              <div className={`grid gap-6 auto-rows-fr ${results.length === 1 ? 'grid-cols-1 max-w-2xl mx-auto' : 'grid-cols-1 lg:grid-cols-2'}`}>
+                {results.map((result, index) => (
+                  result.success ? (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                      className="glass-card rounded-3xl p-6 shadow-xl flex flex-col h-full"
+                    >
+                      {/* Image and Category Header */}
+                      <div className="flex items-start gap-4 mb-6 flex-shrink-0">
+                        {/* Waste Image */}
+                        <div className="relative flex-shrink-0">
+                          <img
+                            src={previews[index]}
+                            alt={`Result ${index + 1}`}
+                            className="w-32 h-32 object-cover rounded-xl shadow-lg ring-2 ring-white"
+                          />
                         </div>
-                        <div className={`${categoryColors[result.data.category]} text-white px-4 py-2 rounded-lg inline-flex items-center gap-2`}>
-                          <span className="text-2xl">{categoryIcons[result.data.category]}</span>
-                          <span className="font-bold capitalize">{result.data.category}</span>
-                          <span className="text-sm">({result.data.confidence}%)</span>
+                        
+                        {/* Category and Dustbin */}
+                        <div className="flex-1 space-y-3">
+                          {/* Category Badge */}
+                          <div className={`${categoryColors[result.data.category] || 'bg-gray-500'} text-white px-4 py-3 rounded-xl shadow-lg`}>
+                            <div className="flex items-center gap-3">
+                              <span className="text-3xl">{categoryIcons[result.data.category] || '♻️'}</span>
+                              <div>
+                                <span className="font-black text-xl capitalize block">{result.data.category}</span>
+                                <span className="text-sm opacity-90 font-semibold">{result.data.confidence}% Match</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Dustbin Indicator */}
+                          <div className={`${dustbinColors[result.data.category]?.bgColor || 'bg-gray-100'} ${dustbinColors[result.data.category]?.borderColor || 'border-gray-400'} border-2 rounded-xl p-3 shadow-md flex items-center gap-3`}>
+                            <div className="text-3xl">🗑️</div>
+                            <div>
+                              <div className={`${dustbinColors[result.data.category]?.textColor || 'text-gray-800'} font-black text-sm`}>
+                                {dustbinColors[result.data.category]?.color || 'General'} BIN
+                              </div>
+                              <div className="text-xs text-gray-600 font-medium">Dispose here</div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Disposal Guidance */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-3">
-                      <h4 className="font-semibold text-blue-900 mb-1 flex items-center text-sm">
-                        <span className="mr-2">📋</span>
-                        Disposal Guidance
-                      </h4>
-                      <p className="text-blue-800 text-sm">
-                        {result.data.disposalGuidance}
-                      </p>
-                    </div>
+                      {/* Content sections - flex-grow to fill space */}
+                      <div className="flex-grow space-y-4">
 
-                    {/* Environmental Impact */}
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                      <h4 className="font-semibold text-green-900 mb-1 flex items-center text-sm">
-                        <span className="mr-2">🌍</span>
-                        Environmental Impact
-                      </h4>
-                      <p className="text-green-800 text-sm">
-                        {result.data.environmentalImpact}
-                      </p>
-                    </div>
+                    {/* Non-Waste Message */}
+                    {!result.data.isWaste && result.data.message && (
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-l-4 border-purple-500 rounded-xl p-4 shadow-md">
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl">ℹ️</span>
+                          <div>
+                            <h4 className="font-black text-purple-900 text-base mb-1">Not Waste</h4>
+                            <p className="text-purple-800 text-sm leading-relaxed font-medium">
+                              {result.data.message}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Key Disposal Steps - Only Top 3 */}
+                    {result.data.disposalInstructions?.steps && result.data.disposalInstructions.steps.length > 0 && (
+                      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-l-4 border-blue-500 rounded-xl p-4 shadow-md">
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl">📋</span>
+                          <div className="flex-1">
+                            <h4 className="font-black text-blue-900 text-base mb-3">Quick Steps</h4>
+                            <div className="space-y-2">
+                              {result.data.disposalInstructions.steps.slice(0, 3).map((step, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                  <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-xs">
+                                    {i + 1}
+                                  </span>
+                                  <p className="text-blue-900 text-sm leading-relaxed font-medium pt-0.5">{step}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Environmental Impact - Simplified */}
+                    {result.data.environmentalImpactDetails?.recycling_benefits && (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 rounded-xl p-4 shadow-md">
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl">🌍</span>
+                          <div className="flex-1">
+                            <h4 className="font-black text-green-900 text-base mb-2">Impact</h4>
+                            <p className="text-green-800 text-sm leading-relaxed font-medium mb-3">
+                              {result.data.environmentalImpactDetails.recycling_benefits}
+                            </p>
+                            {/* Metrics in a row */}
+                            <div className="grid grid-cols-3 gap-2">
+                              {result.data.environmentalImpactDetails.co2_saved && (
+                                <div className="bg-white rounded-lg px-3 py-2 shadow-sm">
+                                  <p className="text-xs text-gray-600 font-semibold mb-0.5">CO₂</p>
+                                  <p className="text-base font-black text-green-700">
+                                    {result.data.environmentalImpactDetails.co2_saved}
+                                  </p>
+                                </div>
+                              )}
+                              {result.data.environmentalImpactDetails.water_saved && (
+                                <div className="bg-white rounded-lg px-3 py-2 shadow-sm">
+                                  <p className="text-xs text-gray-600 font-semibold mb-0.5">WATER</p>
+                                  <p className="text-base font-black text-blue-700">
+                                    {result.data.environmentalImpactDetails.water_saved}
+                                  </p>
+                                </div>
+                              )}
+                              {result.data.environmentalImpactDetails.energy_saved && (
+                                <div className="bg-white rounded-lg px-3 py-2 shadow-sm">
+                                  <p className="text-xs text-gray-600 font-semibold mb-0.5">ENERGY</p>
+                                  <p className="text-base font-black text-yellow-700">
+                                    {result.data.environmentalImpactDetails.energy_saved}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Did You Know - Single Most Interesting Fact */}
+                    {result.data.aiEnhanced?.awareness?.did_you_know && (
+                      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-l-4 border-indigo-500 rounded-xl p-4 shadow-md">
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl">💡</span>
+                          <div>
+                            <h4 className="font-black text-indigo-900 text-base mb-2">Did You Know?</h4>
+                            <p className="text-indigo-800 text-sm leading-relaxed font-medium">
+                              {result.data.aiEnhanced.awareness.did_you_know}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                      </div>
                   </motion.div>
                 ) : (
                   <motion.div
                     key={index}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="glass-card rounded-2xl p-6 border-2 border-red-200"
+                    transition={{ delay: 0.1 }}
+                    className="glass-card rounded-3xl p-6 border-4 border-red-300 shadow-xl"
                   >
                     <div className="flex items-start gap-4">
                       <img
                         src={previews[index]}
                         alt={`Failed ${index + 1}`}
-                        className="w-24 h-24 object-cover rounded-lg opacity-50"
+                        className="w-24 h-24 object-cover rounded-xl opacity-50 shadow-lg"
                       />
                       <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">
-                          Image {index + 1} - Failed
+                        <h3 className="text-xl font-black text-gray-900 mb-2">
+                          Classification Failed
                         </h3>
-                        <p className="text-red-600">
+                        <p className="text-red-600 text-sm font-medium">
                           {result.error}
                         </p>
                       </div>
@@ -557,11 +665,12 @@ const Scan = () => {
                   </motion.div>
                 )
               ))}
+              </div>
 
               {/* Scan Again Button */}
               <button
                 onClick={handleReset}
-                className="btn-primary w-full"
+                className="btn-primary w-full mt-6"
               >
                 Scan More Items
               </button>

@@ -2,25 +2,115 @@ import axios from 'axios';
 import FormData from 'form-data';
 import Waste from '../models/Waste.model.js';
 import User from '../models/User.model.js';
+import { verifyWithGemini, identifyWithGemini, resolveConflict } from '../services/aiEnhancement.js';
 
-// Disposal guidance mapping
-const disposalGuidance = {
-  glass: 'Rinse and place in the glass recycling bin. Remove lids and caps. Broken glass should be wrapped safely.',
-  hazardous: 'Take to a hazardous waste facility. Never dispose in regular trash. Contains harmful chemicals.',
-  metal: 'Place in the metal recycling bin. Clean cans and remove labels. Aluminum and steel are highly recyclable.',
-  organic: 'Compost in the green bin. Food scraps and yard waste decompose naturally and enrich soil.',
-  paper: 'Place in the paper recycling bin. Keep dry and clean. Remove any plastic windows or staples.',
-  plastic: 'Check the recycling number. Rinse containers and remove caps. Place in appropriate recycling bin.'
-};
+// Confidence threshold for AI enhancement
+const CONFIDENCE_THRESHOLD = 50;
 
-// Environmental impact messages
-const environmentalImpact = {
-  glass: 'Glass is 100% recyclable and can be recycled endlessly without loss of quality. Great choice! ♻️',
-  hazardous: 'Proper disposal prevents soil and water contamination. Thank you for being responsible! ⚠️',
-  metal: 'Recycling metal saves 95% of the energy needed to produce new metal. Excellent work! 🔧',
-  organic: 'Composting reduces methane emissions and creates nutrient-rich soil. Excellent choice! 🌱',
-  paper: 'Recycling paper saves trees and reduces landfill waste. One ton saves 17 trees! 📄',
-  plastic: 'Recycling plastic reduces ocean pollution and saves petroleum resources. Keep it up! 🌊'
+// Enhanced disposal guidance with detailed steps
+export const enhancedDisposalGuidance = {
+  glass: {
+    steps: [
+      'Rinse the glass item thoroughly with water',
+      'Remove any lids, caps, or labels',
+      'Place in the green/glass recycling bin',
+      'If broken, wrap carefully in newspaper before disposal'
+    ],
+    dos: ['Rinse before recycling', 'Remove metal caps', 'Separate by color if required'],
+    donts: ['Don\'t include broken ceramics', 'Don\'t mix with regular trash', 'Don\'t include light bulbs'],
+    impact: {
+      recycling_benefits: 'Glass is 100% recyclable and can be recycled endlessly without quality loss',
+      co2_saved: '0.3 kg',
+      water_saved: '1.2 liters',
+      energy_saved: '1.0 kWh'
+    },
+    fact: 'Recycling one glass bottle saves enough energy to power a computer for 25 minutes!'
+  },
+  plastic: {
+    steps: [
+      'Check the recycling number (1-7) on the bottom',
+      'Rinse the container thoroughly',
+      'Remove caps and labels if possible',
+      'Place in the blue/dry waste recycling bin'
+    ],
+    dos: ['Rinse containers', 'Check recycling symbols', 'Flatten bottles to save space'],
+    donts: ['Don\'t include plastic bags', 'Don\'t mix with food waste', 'Don\'t burn plastic'],
+    impact: {
+      recycling_benefits: 'Recycling plastic reduces ocean pollution and saves petroleum resources',
+      co2_saved: '0.5 kg',
+      water_saved: '2.0 liters',
+      energy_saved: '1.5 kWh'
+    },
+    fact: 'It takes 450 years for a plastic bottle to decompose in a landfill!'
+  },
+  paper: {
+    steps: [
+      'Keep paper dry and clean',
+      'Remove any plastic windows or staples',
+      'Flatten cardboard boxes',
+      'Place in the blue/dry waste recycling bin'
+    ],
+    dos: ['Keep paper dry', 'Remove plastic parts', 'Flatten boxes'],
+    donts: ['Don\'t include wet paper', 'Don\'t include tissue paper', 'Don\'t include wax-coated paper'],
+    impact: {
+      recycling_benefits: 'Recycling paper saves trees and reduces landfill waste',
+      co2_saved: '0.4 kg',
+      water_saved: '3.0 liters',
+      energy_saved: '2.0 kWh'
+    },
+    fact: 'Recycling one ton of paper saves 17 trees and 7,000 gallons of water!'
+  },
+  metal: {
+    steps: [
+      'Rinse cans and containers',
+      'Remove labels if possible',
+      'Crush cans to save space',
+      'Place in the blue/dry waste recycling bin'
+    ],
+    dos: ['Rinse thoroughly', 'Remove labels', 'Crush to save space'],
+    donts: ['Don\'t include paint cans', 'Don\'t include aerosol cans', 'Don\'t mix with food waste'],
+    impact: {
+      recycling_benefits: 'Recycling metal saves 95% of the energy needed to produce new metal',
+      co2_saved: '0.6 kg',
+      water_saved: '1.5 liters',
+      energy_saved: '2.5 kWh'
+    },
+    fact: 'Aluminum cans can be recycled and back on store shelves in just 60 days!'
+  },
+  organic: {
+    steps: [
+      'Separate food scraps from packaging',
+      'Place in the green/wet waste bin',
+      'Consider home composting__ if possible',
+      'Keep separate from dry waste'
+    ],
+    dos: ['Compost at home', 'Use biodegradable bags', 'Keep moist waste separate'],
+    donts: ['Don\'t include plastic packaging', 'Don\'t include meat bones', 'Don\'t mix with dry waste'],
+    impact: {
+      recycling_benefits: 'Composting reduces methane emissions and creates nutrient-rich soil',
+      co2_saved: '0.2 kg',
+      water_saved: '0.5 liters',
+      energy_saved: '0.5 kWh'
+    },
+    fact: 'Food waste in landfills produces methane, a greenhouse gas 25x more potent than CO2!'
+  },
+  hazardous: {
+    steps: [
+      'Do NOT dispose in regular trash',
+      'Store safely until collection day',
+      'Take to designated hazardous waste facility',
+      'Contact local authorities for guidance'
+    ],
+    dos: ['Store safely', 'Use designated facilities', 'Follow local guidelines'],
+    donts: ['Never burn hazardous waste', 'Don\'t pour down drains', 'Don\'t mix with regular trash'],
+    impact: {
+      recycling_benefits: 'Proper disposal prevents soil and water contamination',
+      co2_saved: '0.1 kg',
+      water_saved: '0.3 liters',
+      energy_saved: '0.2 kWh'
+    },
+    fact: 'One battery can contaminate 600,000 liters of water if not disposed properly!'
+  }
 };
 
 // Eco score calculation
@@ -40,7 +130,7 @@ const calculateEcoScore = (category, confidence) => {
   return points;
 };
 
-// @desc    Predict waste category
+// @desc    Predict waste category with AI enhancement
 // @route   POST /api/waste/predict
 // @access  Private
 export const predictWaste = async (req, res, next) => {
@@ -48,6 +138,10 @@ export const predictWaste = async (req, res, next) => {
     console.log('📥 Prediction request received');
     console.log('   User:', req.user?.email);
     console.log('   File:', req.file?.originalname);
+    console.log('🔍 Cloudinary Upload Details:');
+    console.log('   Path (URL):', req.file?.path);
+    console.log('   Filename (Public ID):', req.file?.filename);
+    console.log('   Full file object:', JSON.stringify(req.file, null, 2));
     
     if (!req.file) {
       console.log('❌ No file uploaded');
@@ -56,14 +150,26 @@ export const predictWaste = async (req, res, next) => {
         message: 'Please upload an image'
       });
     }
+    
+    if (!req.file.path) {
+      console.log('❌ Cloudinary upload failed - no path returned');
+      return res.status(500).json({
+        success: false,
+        message: 'Image upload to Cloudinary failed'
+      });
+    }
 
     console.log('📤 Sending to model service...');
     
+    // Download image from Cloudinary to send to model service
+    const imageResponse = await axios.get(req.file.path, { responseType: 'arraybuffer' });
+    const imageBuffer = Buffer.from(imageResponse.data);
+    
     // Prepare form data for model service
     const formData = new FormData();
-    formData.append('file', req.file.buffer, {
-      filename: req.file.originalname,
-      contentType: req.file.mimetype
+    formData.append('file', imageBuffer, {
+      filename: req.file.originalname || 'image.jpg',
+      contentType: req.file.mimetype || 'image/jpeg'
     });
 
     // Call model service
@@ -80,53 +186,166 @@ export const predictWaste = async (req, res, next) => {
 
     console.log('✅ Model response:', modelResponse.data);
     
-    const { category, confidence } = modelResponse.data;
+    const { category: modelCategory, confidence: modelConfidence } = modelResponse.data;
+    
+    console.log(`🎯 Model Classification: ${modelCategory} (${modelConfidence}%)`);
+    console.log(`📊 Confidence Threshold: ${CONFIDENCE_THRESHOLD}%`);
+
+    // AI Enhancement Logic
+    let finalResult;
+    let geminiResult = null;
+    
+    if (modelConfidence >= CONFIDENCE_THRESHOLD) {
+      // HIGH CONFIDENCE: Verify with Gemini
+      console.log('✅ High confidence - Verifying with Gemini...');
+      geminiResult = await verifyWithGemini(imageBuffer, req.file.mimetype, modelCategory, modelConfidence);
+      finalResult = resolveConflict(modelCategory, modelConfidence, geminiResult);
+    } else {
+      // LOW CONFIDENCE: Identify with Gemini
+      console.log('⚠️ Low confidence - Identifying with Gemini...');
+      geminiResult = await identifyWithGemini(imageBuffer, req.file.mimetype, modelCategory, modelConfidence);
+      
+      if (geminiResult && geminiResult.item_identified !== 'unknown item') {
+        finalResult = {
+          category: geminiResult.category,
+          specificItem: geminiResult.item_identified,
+          itemDescription: geminiResult.item_description,
+          confidence: modelConfidence,
+          source: 'gemini (low confidence)',
+          hadConflict: false,
+          isWaste: geminiResult.is_waste,
+          isUnknownCategory: !['glass', 'hazardous', 'metal', 'organic', 'paper', 'plastic'].includes(geminiResult.category),
+          disposalGuidance: geminiResult.disposal_instructions.steps.join('. '),
+          recyclingTips: geminiResult.disposal_instructions.dos,
+          disposalInstructions: geminiResult.disposal_instructions,
+          environmentalImpact: geminiResult.environmental_impact,
+          awareness: geminiResult.awareness,
+          alternatives: geminiResult.alternatives,
+          message: geminiResult.message
+        };
+      } else {
+        // Gemini also failed
+        finalResult = resolveConflict(modelCategory, modelConfidence, null);
+      }
+    }
+
+    console.log('🎉 Final Result:', {
+      category: finalResult.category,
+      specificItem: finalResult.specificItem,
+      source: finalResult.source,
+      hadConflict: finalResult.hadConflict
+    });
 
     // Calculate eco score
-    const ecoPoints = calculateEcoScore(category, confidence);
+    const ecoPoints = finalResult.isWaste ? calculateEcoScore(finalResult.category, modelConfidence) : 0;
+    
+    // Ensure ecoPoints is a valid number
+    const validEcoPoints = isNaN(ecoPoints) ? 0 : Math.max(0, Math.round(ecoPoints));
     
     console.log('💾 Saving to database...');
 
-    // Save waste record
-    const wasteRecord = await Waste.create({
+    // Get Cloudinary URL (multer-storage-cloudinary automatically uploads)
+    const imageUrl = req.file?.path || null; // Cloudinary URL
+    const imagePublicId = req.file?.filename || null; // Cloudinary public ID
+    
+    console.log('📸 Image Storage Info:');
+    console.log('   Image URL:', imageUrl);
+    console.log('   Public ID:', imagePublicId);
+
+    // Prepare waste record data
+    const wasteData = {
       userId: req.user._id,
-      category: category.toLowerCase(),
-      confidence: Math.round(confidence),
-      disposalGuidance: disposalGuidance[category.toLowerCase()],
+      category: finalResult.category.toLowerCase(),
+      specificItem: finalResult.specificItem,
+      itemDescription: finalResult.itemDescription,
+      confidence: Math.round(modelConfidence),
+      isUnknownCategory: finalResult.isUnknownCategory || false,
+      isWaste: finalResult.isWaste,
+      imageUrl: imageUrl, // Save Cloudinary URL
+      imageData: imagePublicId, // Save public ID for deletion later
+      disposalGuidance: finalResult.disposalGuidance || disposalGuidance[finalResult.category.toLowerCase()] || 'Contact local waste management for guidance',
+      recyclingTips: finalResult.recyclingTips || [],
+      disposalInstructions: finalResult.disposalInstructions || {
+        steps: [finalResult.disposalGuidance || 'Dispose properly'],
+        dos: finalResult.recyclingTips || [],
+        donts: []
+      },
       environmentalImpact: {
         carbonSaved: 0,
-        description: environmentalImpact[category.toLowerCase()]
+        description: finalResult.environmentalImpact?.recycling_benefits || environmentalImpact[finalResult.category.toLowerCase()] || 'Proper disposal helps the environment',
+        recycling_benefits: finalResult.environmentalImpact?.recycling_benefits,
+        co2_saved: finalResult.environmentalImpact?.co2_saved,
+        water_saved: finalResult.environmentalImpact?.water_saved,
+        energy_saved: finalResult.environmentalImpact?.energy_saved
       },
-      ecoPoints: ecoPoints,
+      aiEnhancedData: {
+        source: finalResult.source,
+        hadConflict: finalResult.hadConflict,
+        conflictDetails: finalResult.conflictDetails,
+        awareness: finalResult.awareness,
+        alternatives: finalResult.alternatives
+      },
+      ecoPoints: validEcoPoints,
       timestamp: new Date()
-    });
+    };
+
+    // Save waste record
+    const wasteRecord = await Waste.create(wasteData);
 
     console.log('✅ Waste record saved:', wasteRecord._id);
+    console.log('   Saved imageUrl:', wasteRecord.imageUrl);
+    console.log('   Saved imageData:', wasteRecord.imageData);
     console.log('📊 Updating user stats...');
 
     // Update user stats
     await User.findByIdAndUpdate(req.user._id, {
       $inc: {
         totalScans: 1,
-        ecoScore: ecoPoints
+        ecoScore: validEcoPoints
       }
     });
 
     console.log('✅ User stats updated');
     console.log('🎉 Prediction complete!');
 
+    // Prepare response
+    const responseData = {
+      id: wasteRecord._id,
+      category: wasteRecord.category,
+      specificItem: wasteRecord.specificItem,
+      itemDescription: wasteRecord.itemDescription,
+      confidence: wasteRecord.confidence,
+      isWaste: wasteRecord.isWaste,
+      isUnknownCategory: wasteRecord.isUnknownCategory,
+      disposalGuidance: wasteRecord.disposalGuidance,
+      disposalInstructions: wasteRecord.disposalInstructions,
+      environmentalImpact: wasteRecord.environmentalImpact.description,
+      environmentalImpactDetails: {
+        recycling_benefits: wasteRecord.environmentalImpact.recycling_benefits,
+        co2_saved: wasteRecord.environmentalImpact.co2_saved,
+        water_saved: wasteRecord.environmentalImpact.water_saved,
+        energy_saved: wasteRecord.environmentalImpact.energy_saved
+      },
+      ecoPointsEarned: validEcoPoints,
+      timestamp: wasteRecord.timestamp,
+      aiEnhanced: {
+        source: wasteRecord.aiEnhancedData.source,
+        hadConflict: wasteRecord.aiEnhancedData.hadConflict,
+        conflictDetails: wasteRecord.aiEnhancedData.conflictDetails,
+        awareness: wasteRecord.aiEnhancedData.awareness,
+        alternatives: wasteRecord.aiEnhancedData.alternatives
+      }
+    };
+
+    // Add message for non-waste items
+    if (!wasteRecord.isWaste && finalResult.message) {
+      responseData.message = finalResult.message;
+    }
+
     res.status(200).json({
       success: true,
-      message: 'Waste classified successfully',
-      data: {
-        id: wasteRecord._id,
-        category: wasteRecord.category,
-        confidence: wasteRecord.confidence,
-        disposalGuidance: wasteRecord.disposalGuidance,
-        environmentalImpact: wasteRecord.environmentalImpact.description,
-        ecoPointsEarned: ecoPoints,
-        timestamp: wasteRecord.timestamp
-      }
+      message: wasteRecord.isWaste ? 'Waste classified successfully' : 'Item identified (not waste)',
+      data: responseData
     });
   } catch (error) {
     console.error('❌ Prediction error:', error.message);
@@ -151,33 +370,55 @@ export const predictWaste = async (req, res, next) => {
   }
 };
 
-// @desc    Get user waste history
+// @desc    Get user waste history grouped by date
 // @route   GET /api/waste/history
 // @access  Private
 export const getHistory = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 50 } = req.query;
     
-    const skip = (page - 1) * limit;
-
-    const history = await Waste.find({ userId: req.user._id })
+    // Get all scans for the user, sorted by date (newest first)
+    const scans = await Waste.find({ userId: req.user._id })
       .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .select('-__v');
+      .select('category imageUrl disposalGuidance timestamp confidence')
+      .lean();
 
-    const total = await Waste.countDocuments({ userId: req.user._id });
+    // Group scans by date
+    const groupedByDate = {};
+    
+    scans.forEach(scan => {
+      const date = new Date(scan.timestamp).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      
+      if (!groupedByDate[date]) {
+        groupedByDate[date] = {
+          date: date,
+          timestamp: scan.timestamp,
+          scans: [],
+          categoryCounts: {}
+        };
+      }
+      
+      groupedByDate[date].scans.push(scan);
+      
+      // Count categories
+      groupedByDate[date].categoryCounts[scan.category] = 
+        (groupedByDate[date].categoryCounts[scan.category] || 0) + 1;
+    });
+
+    // Convert to array and sort by date
+    const historyByDate = Object.values(groupedByDate).sort((a, b) => 
+      new Date(b.timestamp) - new Date(a.timestamp)
+    );
 
     res.status(200).json({
       success: true,
       data: {
-        history,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / limit),
-          totalRecords: total,
-          hasMore: skip + history.length < total
-        }
+        history: historyByDate,
+        totalScans: scans.length
       }
     });
   } catch (error) {

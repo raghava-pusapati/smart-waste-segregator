@@ -10,8 +10,24 @@ const wasteSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['glass', 'hazardous', 'metal', 'organic', 'paper', 'plastic'],
     lowercase: true
+    // Removed enum to allow unknown categories like textile, e-waste, battery, furniture
+  },
+  specificItem: {
+    type: String,
+    default: null
+  },
+  itemDescription: {
+    type: String,
+    default: null
+  },
+  isUnknownCategory: {
+    type: Boolean,
+    default: false
+  },
+  isWaste: {
+    type: Boolean,
+    default: true
   },
   confidence: {
     type: Number,
@@ -34,6 +50,27 @@ const wasteSchema = new mongoose.Schema({
   recyclingTips: [{
     type: String
   }],
+  disposalInstructions: {
+    steps: [{ type: String }],
+    dos: [{ type: String }],
+    donts: [{ type: String }]
+  },
+  aiEnhancedData: {
+    source: String, // 'model', 'gemini', 'model + gemini', 'gemini (corrected)'
+    hadConflict: Boolean,
+    conflictDetails: {
+      modelSaid: String,
+      modelConfidence: Number,
+      geminiSaid: String,
+      reasoning: String
+    },
+    awareness: {
+      did_you_know: String,
+      global_impact: String,
+      local_tip: String
+    },
+    alternatives: [{ type: String }]
+  },
   environmentalImpact: {
     carbonSaved: {
       type: Number,
@@ -42,7 +79,11 @@ const wasteSchema = new mongoose.Schema({
     description: {
       type: String,
       required: true
-    }
+    },
+    recycling_benefits: String,
+    co2_saved: String,
+    water_saved: String,
+    energy_saved: String
   },
   ecoPoints: {
     type: Number,
